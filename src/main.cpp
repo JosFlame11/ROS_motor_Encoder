@@ -11,8 +11,6 @@ double Rz = 0;
 
 ros::NodeHandle nh;
 
-
-
 //Left motor pins
 #define EnA 36
 #define In1 35
@@ -29,6 +27,9 @@ const int MC1 = 1;
 
 const int res = 8;
 const int freq = 1000;
+
+int16_t sub_Lvel = 0;
+int16_t sub_Rvel = 0;
 
 
 
@@ -95,12 +96,12 @@ void motorSpeed(int Lvel, int Rvel){
 //callbackFunction for the teleop_key
 void messageCb(const geometry_msgs::Twist& msg){
   Rx = msg.linear.x;
-  Rz = msg.linear.z;
+  Rz = msg.angular.z;
 
-  if (Rx >= 2.0) motorSpeed(255, 255);
-  if (Rx <= 0) motorSpeed(0, 0);
-  if (Rz >= 2.0) motorSpeed(100, -100);
-  if (Rz <= 0) motorSpeed(-100, 100);
+  if (Rx >= 1.0 && Rz == 0) sub_Lvel = 255, sub_Rvel = 255; //avanzar (fix)
+  else if (Rx <= 0 && Rz == 0) sub_Lvel = -100, sub_Rvel = -100; //Retroseder (fix)
+  else if (Rz >= 1.0 && Rx == 0) sub_Lvel = 200, sub_Rvel = -200; //Derecha
+  else if (Rz <= 0 && Rx == 0) sub_Lvel = -200, sub_Rvel = 200; //Izq
 }
 //Subscriber
 ros::Subscriber<geometry_msgs::Twist> sub("turtle1/cmd_vel", messageCb);
@@ -108,7 +109,7 @@ ros::Subscriber<geometry_msgs::Twist> sub("turtle1/cmd_vel", messageCb);
 //Publisher
 std_msgs::Float32 rpm_value_float32;
 ros::Publisher RPM_val("RPM_val", &rpm_value_float32);
-char MSG[12] = "RPM value: ";
+// char MSG[12] = "RPM value: ";
 
 
 void setup() {
@@ -142,7 +143,7 @@ void setup() {
 void loop() {
 
   unsigned long currentMillis = micros(); // Get the current time
-  motorSpeed(250, 250);
+  motorSpeed(sub_Lvel, sub_Rvel);
   // Check if the time interval has passed
   if (currentMillis - previousMillis >= 100000) {
     double dt = (currentMillis - previousMillis) / 1e6;
@@ -160,13 +161,11 @@ void loop() {
     // Calculate RPM
     double leftRPM = calculateRPM(Leftpulses, encoderPPR, gearRatio, dt);
     double rightRPM = calculateRPM(Rightpulses, encoderPPR, gearRatio, dt);
-
-  rpm_value_float32.data = static_cast<float>(leftRPM);
-
-  }
-  if (currentMillis - previousMillis >= 500000){
+    rpm_value_float32.data = static_cast<float>(leftRPM);
     RPM_val.publish(&rpm_value_float32);
     nh.spinOnce();
   }
+  // if (currentMillis - previousMillis >= 1000000){
+  // }
 }
 
