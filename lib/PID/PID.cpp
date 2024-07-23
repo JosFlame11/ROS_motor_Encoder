@@ -26,7 +26,7 @@ void PID::setKonstants(double kp, double ki, double kd) {
 bool PID::calculate() {
   unsigned long now = micros();
   double dt = (now - _lastTime) / 1e6;
-  double error = *_input - _setpoint;
+  double error = _setpoint - *_input;
   _integral += error * dt;
   double derivative = (_lastInput - *_input) / dt;
   *_output = -1 * (_kp * error + _ki * _integral + _kd * derivative);
