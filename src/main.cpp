@@ -56,25 +56,29 @@ PIDgains rightGains(7.0, 5.0, 0.0);
 double leftRPM;
 double rightRPM;
 
+double leftVel_rad;
+double rightVel_rad;
+
 // Desire velocity
 double leftPID_output;
 double rightPID_output;
 
 // Create PID objects for each motor
 // PID objects
-PID leftPID(&leftRPM, &leftPID_output, 0, leftGains.Kp, leftGains.Ki, leftGains.Kd);
-PID rightPID(&rightRPM, &rightPID_output, 0, rightGains.Kp, rightGains.Ki, rightGains.Kd);
+PID leftPID(&leftVel_rad, &leftPID_output, 0, leftGains.Kp, leftGains.Ki, leftGains.Kd);
+PID rightPID(&leftVel_rad, &rightPID_output, 0, rightGains.Kp, rightGains.Ki, rightGains.Kd);
 
 
 // const int res = 8;
 // const int freq = 1000;
 
-int16_t sub_Lvel = 0;
-int16_t sub_Rvel = 0;
+int16_t leftSpeed = 0;
+int16_t rightSpeed = 0;
 
 // Encoder specifications
-const double encoderPPR = 341.2; // Pulses per revolution (PPR) of the encoder
-const double gearRatio = 32.0 / 1.0; // Gear ratio (1:32)
+const double encoderCPR = 12.0; // Pulses per revolution (PPR) of the encoder
+const double gearRatio = 35.0 / 1.0; // Gear ratio (1:32)
+const double L = 163 / 1000; // Distance between wheels in meters (it is in mm)
 
 // Time interval for RPM calculation
 unsigned long previousMillis = 0; // Stores the last time the RPM was calculated
@@ -83,12 +87,18 @@ long previousLeftPosition = 0; // Stores the previous position of the left encod
 long previousRightPosition = 0; // Stores the previos position of the right encoder
 
 // Function to calculate RPM
-double calculateRPM(long pulses, double encoderPPR, double gearRatio, double timeIntervalInSeconds) {
-  double effectivePPR = 4.0 * encoderPPR;
+double calculateRPM(long pulses, double encoderCPR, double gearRatio, double timeIntervalInSeconds) {
+  double effectivePPR = encoderCPR * gearRatio;
   double revolutions = static_cast<double>(pulses) / effectivePPR;
   double rps = revolutions / timeIntervalInSeconds;
   double rpm = (rps * 60);
   return rpm;
+}
+double calculateRadPerSec(int64_t pulseDifference, double periodSeconds) {
+  // Calculate the velocity in radians per second
+  double revolutions = pulseDifference / (encoderCPR * gearRatio);
+  double velocityRadPerSec = revolutions * (2.0 * PI) / periodSeconds;
+  return velocityRadPerSec;
 }
 //Function for motor speed base on PWM
 void motorSpeed(int Lvel, int Rvel){
@@ -127,19 +137,15 @@ void motorSpeed(int Lvel, int Rvel){
 void messageCb(const geometry_msgs::Twist& msg){
   Rx = msg.linear.x;
   Rz = msg.angular.z;
-
-  if (Rx >= 1.0 && Rz == 0) sub_Lvel = 255, sub_Rvel = 255; //avanzar (fix)
-  else if (Rx <= 0 && Rz == 0) sub_Lvel = -100, sub_Rvel = -100; //Retroseder (fix)
-  else if (Rz >= 1.0 && Rx == 0) sub_Lvel = 200, sub_Rvel = -200; //Derecha
-  else if (Rz <= 0 && Rx == 0) sub_Lvel = -200, sub_Rvel = 200; //Izq
 }
 //Subscriber
-ros::Subscriber<geometry_msgs::Twist> sub("turtle1/cmd_vel", messageCb);
+ros::Subscriber<geometry_msgs::Twist> sub("/cmd_vel", messageCb);
 
-//Publisher
+//Publishers
 std_msgs::Float32 left_RPM_value;
-std_msgs::Float32 right_RPM_value;
 ros::Publisher RPM_left_val("RPM_left_val", &left_RPM_value);
+
+std_msgs::Float32 right_RPM_value;
 ros::Publisher RPM_right_val("RPM_right_val", &right_RPM_value);
 // char MSG[12] = "RPM value: ";
 
@@ -191,11 +197,18 @@ void loop() {
     previousRightPosition = currentRightPosition; // Update the previous position
     
     // Calculate RPM
-    double leftRPM = calculateRPM(Leftpulses, encoderPPR, gearRatio, dt);
-    double rightRPM = calculateRPM(Rightpulses, encoderPPR, gearRatio, dt);
+    // leftRPM = calculateRPM(Leftpulses, encoderCPR, gearRatio, dt);
+    // rightRPM = calculateRPM(Rightpulses, encoderCPR, gearRatio, dt);
 
-    leftPID.setSetpoint(sub_Lvel);
-    rightPID.setSetpoint(sub_Rvel);
+    // Calculate rad/s
+    leftVel_rad = calculateRadPerSec(Leftpulses, dt);
+    rightVel_rad = calculateRadPerSec(Rightpulses, dt);
+
+    leftSpeed = Rx - (Rz * L/2);
+    rightSpeed = Rx + (Rz * L/2);
+
+    leftPID.setSetpoint(leftSpeed * 7);
+    rightPID.setSetpoint(rightSpeed * 7);
 
     leftPID.calculate();
     rightPID.calculate();
@@ -205,7 +218,7 @@ void loop() {
 
     previousMillis = currentMillis; // Update the time
   }
-  motorSpeed(sub_Lvel, sub_Rvel);
+  motorSpeed(leftPID_output,rightPID_output);
   // if (currentMillis - previousMillis >= 1000000){
   // }
 }
