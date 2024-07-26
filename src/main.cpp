@@ -14,22 +14,22 @@ double Rz = 0;
 ros::NodeHandle nh;
 
 //Left motor pins
-#define EnA 15  // 36
-#define In1 2  //35
-#define In2 4  //34
+#define EnA 2  // 36
+#define In1 13  //35
+#define In2 12  //34
 // Define pins for the encoder of Left motor
-const int encLeftA = 27;  //7
-const int encLeftB = 26;  //6
+const int encLeftA = 9;  //7
+const int encLeftB = 3;  //6
 // Motor pwmChannel
 const int MC0 = 0;
 
 //Rigth motor pins
-#define In3 16   //33
-#define In4 17   //47
-#define Enb 5   //48
+#define In3 14   //33
+#define In4 21   //47
+#define Enb 1   //48
 // Define pins for the encoder of Right motor
-const int encRightA = 14;   //5
-const int encRightB = 12;   //4
+const int encRightA = 10;   //5
+const int encRightB = 11;   //4
 // Motor pwmChannel
 const int MC1 = 1;
 
@@ -59,17 +59,19 @@ double rightVel_rad;
 double leftPID_output;
 double rightPID_output;
 
+// Velocity changing overtime
+double leftSpeed = 0;
+double rightSpeed = 0;
+
 // Create PID objects for each motor
 // PID objects
-PID leftPID(&leftVel_rad, &leftPID_output, 0, leftGains.Kp, leftGains.Ki, leftGains.Kd);
-PID rightPID(&leftVel_rad, &rightPID_output, 0, rightGains.Kp, rightGains.Ki, rightGains.Kd);
+PID leftPID(&leftVel_rad, &leftPID_output, &leftSpeed, leftGains.Kp, leftGains.Ki, leftGains.Kd);
+PID rightPID(&leftVel_rad, &rightPID_output, &rightSpeed, rightGains.Kp, rightGains.Ki, rightGains.Kd);
 
 
 const int res = 8;
 const int freq = 1000;
 
-int16_t leftSpeed = 0;
-int16_t rightSpeed = 0;
 
 // Encoder specifications
 const double encoderCPR = 12.0; // Pulses per revolution (PPR) of the encoder
@@ -131,6 +133,28 @@ void motorSpeed(int Lvel, int Rvel){
 void messageCb(const geometry_msgs::Twist& msg){
   Rx = msg.linear.x;
   Rz = msg.angular.z;
+
+  if (Rx >= 2.0){ //Forward
+    leftSpeed = 9;
+    rightSpeed = 9;
+  }
+  else if (Rx <= -2.0){  //Backwards
+    leftSpeed = -9;
+    rightSpeed = -9;
+  }
+  else if (Rz >= 0.5){ //Right turn
+    leftSpeed = 5;
+    rightSpeed = -5;
+  }
+  else if (Rz <= -0.5){ //Left turn
+    leftSpeed = -5;
+    rightSpeed = 5;
+  }
+  else if (Rx == 0 && Rz == 0){
+    leftSpeed = 0;
+    rightSpeed = 0;
+  }
+
 }
 //Subscriber
 ros::Subscriber<geometry_msgs::Twist> sub("/cmd_vel", messageCb);
@@ -176,8 +200,6 @@ void setup() {
 void loop() {
 
   unsigned long currentMillis = micros(); // Get the current time
-  leftSpeed = Rx - (Rz * L/2);
-  rightSpeed = Rx + (Rz * L/2);
   // Check if the time interval has passed
   if (currentMillis - previousMillis >= 100000) {
     double dt = (currentMillis - previousMillis) / 1e6;
@@ -200,9 +222,6 @@ void loop() {
     leftVel_rad = calculateRadPerSec(Leftpulses, dt);
     rightVel_rad = calculateRadPerSec(Rightpulses, dt);
 
-
-    leftPID.setSetpoint(leftSpeed * 7);
-    rightPID.setSetpoint(rightSpeed * 7);
 
     leftPID.calculate();
     rightPID.calculate();
