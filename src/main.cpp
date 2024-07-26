@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <ESP32Encoder.h>
 #include <PID.h>
-#include <Motors.h>
+// #include <Motors.h>
 #include <ros.h>
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/String.h>
@@ -14,28 +14,24 @@ double Rz = 0;
 ros::NodeHandle nh;
 
 //Left motor pins
-#define EnA 36
-#define In1 35
-#define In2 34
+#define EnA 15  // 36
+#define In1 2  //35
+#define In2 4  //34
 // Define pins for the encoder of Left motor
-const int encLeftA = 7;
-const int encLeftB = 6;
+const int encLeftA = 27;  //7
+const int encLeftB = 26;  //6
 // Motor pwmChannel
 const int MC0 = 0;
 
 //Rigth motor pins
-#define In3 33
-#define In4 47
-#define Enb 48
+#define In3 16   //33
+#define In4 17   //47
+#define Enb 5   //48
 // Define pins for the encoder of Right motor
-const int encRightA = 5;
-const int encRightB = 4;
+const int encRightA = 14;   //5
+const int encRightB = 12;   //4
 // Motor pwmChannel
 const int MC1 = 1;
-
-// Create motor objects
-Motor leftMotor(EnA, In1, In2, MC0);
-Motor rightMotor(Enb, In3, In4, MC1);
 
 // Create an Encoder object
 ESP32Encoder LeftEnc;
@@ -49,8 +45,8 @@ struct PIDgains{
   PIDgains(double kp, double ki, double kd) : Kp(kp), Ki(ki), Kd(kd) {}
 };
 
-PIDgains leftGains(7.0, 5.0, 0.0);
-PIDgains rightGains(7.0, 5.0, 0.0);
+PIDgains leftGains(1.331, 66.56, 0.0);
+PIDgains rightGains(2.683, 134.17, 0.0);
 
 // Pulses 
 double leftRPM;
@@ -69,8 +65,8 @@ PID leftPID(&leftVel_rad, &leftPID_output, 0, leftGains.Kp, leftGains.Ki, leftGa
 PID rightPID(&leftVel_rad, &rightPID_output, 0, rightGains.Kp, rightGains.Ki, rightGains.Kd);
 
 
-// const int res = 8;
-// const int freq = 1000;
+const int res = 8;
+const int freq = 1000;
 
 int16_t leftSpeed = 0;
 int16_t rightSpeed = 0;
@@ -88,7 +84,7 @@ long previousRightPosition = 0; // Stores the previos position of the right enco
 
 // Function to calculate RPM
 double calculateRPM(long pulses, double encoderCPR, double gearRatio, double timeIntervalInSeconds) {
-  double effectivePPR = encoderCPR * gearRatio;
+  double effectivePPR = 4 * encoderCPR * gearRatio;
   double revolutions = static_cast<double>(pulses) / effectivePPR;
   double rps = revolutions / timeIntervalInSeconds;
   double rpm = (rps * 60);
@@ -96,42 +92,40 @@ double calculateRPM(long pulses, double encoderCPR, double gearRatio, double tim
 }
 double calculateRadPerSec(int64_t pulseDifference, double periodSeconds) {
   // Calculate the velocity in radians per second
-  double revolutions = pulseDifference / (encoderCPR * gearRatio);
+  double revolutions = pulseDifference / (4 * encoderCPR * gearRatio);
   double velocityRadPerSec = revolutions * (2.0 * PI) / periodSeconds;
   return velocityRadPerSec;
 }
 //Function for motor speed base on PWM
 void motorSpeed(int Lvel, int Rvel){
   // //Set the speed of the motors
-  // Lvel = constrain(Lvel, -255, 255);
-  // Rvel = constrain(Rvel, -255, 255);
+  Lvel = constrain(Lvel, -255, 255);
+  Rvel = constrain(Rvel, -255, 255);
 
-  //Determine rotation
-  // if (Lvel > 0){
-  //   digitalWrite(In1, HIGH);
-  //   digitalWrite(In2, LOW);
-  // }
-  // else if (Lvel < 0){
-  //     digitalWrite(In1, LOW);
-  //     digitalWrite(In2, HIGH);
-  // }
-  // if (Rvel > 0){
-  //   digitalWrite(In3, HIGH);
-  //   digitalWrite(In4, LOW);
-  // }
-  // else if (Rvel < 0){
-  //   digitalWrite(In3, LOW);
-  //   digitalWrite(In4, HIGH);
-  // }
-  // // (Lvel > 0) ? digitalWrite(In1, HIGH), digitalWrite(In2, LOW) : digitalWrite(In1, LOW), digitalWrite(In2, HIGH);
-  // // (Rvel > 0) ? digitalWrite(In3, HIGH), digitalWrite(In4, LOW) : digitalWrite(In3, LOW), digitalWrite(In4, HIGH);
+  // Determine rotation
+  if (Lvel > 0){
+    digitalWrite(In1, HIGH);
+    digitalWrite(In2, LOW);
+  }
+  else if (Lvel < 0){
+      digitalWrite(In1, LOW);
+      digitalWrite(In2, HIGH);
+  }
+  if (Rvel > 0){
+    digitalWrite(In3, HIGH);
+    digitalWrite(In4, LOW);
+  }
+  else if (Rvel < 0){
+    digitalWrite(In3, LOW);
+    digitalWrite(In4, HIGH);
+  }
+  // (Lvel > 0) ? digitalWrite(In1, HIGH), digitalWrite(In2, LOW) : digitalWrite(In1, LOW), digitalWrite(In2, HIGH);
+  // (Rvel > 0) ? digitalWrite(In3, HIGH), digitalWrite(In4, LOW) : digitalWrite(In3, LOW), digitalWrite(In4, HIGH);
 
-  // //Set absolute value of the speed
-  // ledcWrite(MC0, Lvel);
-  // ledcWrite(MC1, Rvel);
+  //Set absolute value of the speed
+  ledcWrite(MC0, Lvel);
+  ledcWrite(MC1, Rvel);
 
-  leftMotor.setMotorSpeed(Lvel);
-  rightMotor.setMotorSpeed(Rvel);
 }
 //callbackFunction for the teleop_key
 void messageCb(const geometry_msgs::Twist& msg){
@@ -165,17 +159,17 @@ void setup() {
   RightEnc.clearCount();
 
   //Initialize motors
-  // pinMode(EnA, OUTPUT);
-  // pinMode(In1, OUTPUT);
-  // pinMode(In2, OUTPUT);
-  // pinMode(Enb, OUTPUT);
-  // pinMode(In3, OUTPUT);
-  // pinMode(In4, OUTPUT);
+  pinMode(EnA, OUTPUT);
+  pinMode(In1, OUTPUT);
+  pinMode(In2, OUTPUT);
+  pinMode(Enb, OUTPUT);
+  pinMode(In3, OUTPUT);
+  pinMode(In4, OUTPUT);
 
-  // ledcSetup(MC0, freq, res);
-  // ledcSetup(MC1, freq, res);
-  // ledcAttachPin(EnA, MC0);
-  // ledcAttachPin(Enb, MC1);
+  ledcSetup(MC0, freq, res);
+  ledcSetup(MC1, freq, res);
+  ledcAttachPin(EnA, MC0);
+  ledcAttachPin(Enb, MC1);
   // left_RPM_value.data = 0.0;
 }
 
