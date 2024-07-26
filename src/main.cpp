@@ -176,6 +176,8 @@ void setup() {
 void loop() {
 
   unsigned long currentMillis = micros(); // Get the current time
+  leftSpeed = Rx - (Rz * L/2);
+  rightSpeed = Rx + (Rz * L/2);
   // Check if the time interval has passed
   if (currentMillis - previousMillis >= 100000) {
     double dt = (currentMillis - previousMillis) / 1e6;
@@ -198,21 +200,21 @@ void loop() {
     leftVel_rad = calculateRadPerSec(Leftpulses, dt);
     rightVel_rad = calculateRadPerSec(Rightpulses, dt);
 
-    leftSpeed = Rx - (Rz * L/2);
-    rightSpeed = Rx + (Rz * L/2);
 
     leftPID.setSetpoint(leftSpeed * 7);
     rightPID.setSetpoint(rightSpeed * 7);
 
     leftPID.calculate();
     rightPID.calculate();
-    left_RPM_value.data = static_cast<float>(leftRPM);
-    RPM_left_val.publish(&left_RPM_value);
-    nh.spinOnce();
 
     previousMillis = currentMillis; // Update the time
   }
   motorSpeed(leftPID_output,rightPID_output);
+  left_RPM_value.data = static_cast<float>(leftSpeed);
+  right_RPM_value.data = static_cast<float>(rightSpeed);
+  RPM_left_val.publish(&left_RPM_value);
+  RPM_right_val.publish(&right_RPM_value);
+  nh.spinOnce();
   // if (currentMillis - previousMillis >= 1000000){
   // }
 }
