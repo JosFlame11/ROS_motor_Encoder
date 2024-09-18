@@ -2,16 +2,8 @@
 #include <ESP32Encoder.h>
 #include <PID.h>
 // #include <Motors.h>
-#include <ros.h>
-#include <geometry_msgs/Twist.h>
-#include <std_msgs/String.h>
-#include <std_msgs/Float32.h>
 
-///////ROS node///////
-double Rx = 0;
-double Rz = 0;
 
-ros::NodeHandle nh;
 
 //Left motor pins
 #define EnA 2  // 36
@@ -70,7 +62,7 @@ PID rightPID(&leftVel_rad, &rightPID_output, &rightSpeed, rightGains.Kp, rightGa
 
 
 const int res = 8;
-const int freq = 1000;
+const int freq = 30000;
 
 
 // Encoder specifications
@@ -86,7 +78,7 @@ long previousRightPosition = 0; // Stores the previos position of the right enco
 
 // Function to calculate RPM
 double calculateRPM(long pulses, double encoderCPR, double gearRatio, double timeIntervalInSeconds) {
-  double effectivePPR = 4 * encoderCPR * gearRatio;
+  double effectivePPR = 2 * encoderCPR * gearRatio;
   double revolutions = static_cast<double>(pulses) / effectivePPR;
   double rps = revolutions / timeIntervalInSeconds;
   double rpm = (rps * 60);
@@ -94,7 +86,7 @@ double calculateRPM(long pulses, double encoderCPR, double gearRatio, double tim
 }
 double calculateRadPerSec(int64_t pulseDifference, double periodSeconds) {
   // Calculate the velocity in radians per second
-  double revolutions = pulseDifference / (4 * encoderCPR * gearRatio);
+  double revolutions = pulseDifference / (2 * encoderCPR * gearRatio);
   double velocityRadPerSec = revolutions * (2.0 * PI) / periodSeconds;
   return velocityRadPerSec;
 }
@@ -129,56 +121,14 @@ void motorSpeed(int Lvel, int Rvel){
   ledcWrite(MC1, Rvel);
 
 }
-//callbackFunction for the teleop_key
-void messageCb(const geometry_msgs::Twist& msg){
-  Rx = msg.linear.x;
-  Rz = msg.angular.z;
-
-  if (Rx >= 2.0){ //Forward
-    leftSpeed = 9;
-    rightSpeed = 9;
-  }
-  else if (Rx <= -2.0){  //Backwards
-    leftSpeed = -9;
-    rightSpeed = -9;
-  }
-  else if (Rz >= 0.5){ //Right turn
-    leftSpeed = 5;
-    rightSpeed = -5;
-  }
-  else if (Rz <= -0.5){ //Left turn
-    leftSpeed = -5;
-    rightSpeed = 5;
-  }
-  else if (Rx == 0 && Rz == 0){
-    leftSpeed = 0;
-    rightSpeed = 0;
-  }
-
-}
-//Subscriber
-ros::Subscriber<geometry_msgs::Twist> sub("/cmd_vel", messageCb);
-
-//Publishers
-std_msgs::Float32 left_RPM_value;
-ros::Publisher RPM_left_val("RPM_left_val", &left_RPM_value);
-
-std_msgs::Float32 right_RPM_value;
-ros::Publisher RPM_right_val("RPM_right_val", &right_RPM_value);
-// char MSG[12] = "RPM value: ";
 
 
 void setup() {
-  //Initialize Ros node
-  nh.initNode();
-  nh.subscribe(sub);
-  nh.advertise(RPM_left_val);
-  nh.advertise(RPM_right_val);
-
+  Serial.begin(115200);
   //Initialize enconders
   ESP32Encoder::useInternalWeakPullResistors = puType::up;
-  LeftEnc.attachFullQuad(encLeftA, encLeftB);
-  RightEnc.attachFullQuad(encRightA, encRightB);
+  LeftEnc.attachHalfQuad(encLeftA, encLeftB);
+  RightEnc.attachHalfQuad(encRightA, encRightB);
   LeftEnc.clearCount();
   RightEnc.clearCount();
 
@@ -229,12 +179,6 @@ void loop() {
     previousMillis = currentMillis; // Update the time
   }
   motorSpeed(leftPID_output,rightPID_output);
-  left_RPM_value.data = static_cast<float>(leftSpeed);
-  right_RPM_value.data = static_cast<float>(rightSpeed);
-  RPM_left_val.publish(&left_RPM_value);
-  RPM_right_val.publish(&right_RPM_value);
-  nh.spinOnce();
-  // if (currentMillis - previousMillis >= 1000000){
-  // }
+ 
 }
 
