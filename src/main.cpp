@@ -172,13 +172,16 @@ void loop() {
     leftVel_rad = calculateRadPerSec(Leftpulses, dt);
     rightVel_rad = calculateRadPerSec(Rightpulses, dt);
 
-
-    leftPID.calculate();
-    rightPID.calculate();
+    Serial.print(leftVel_rad);
+    Serial.print(" ");
+    Serial.println(rightVel_rad);
+    // leftPID.calculate();
+    // rightPID.calculate();
 
     previousMillis = currentMillis; // Update the time
   }
-  motorSpeed(leftPID_output,rightPID_output);
+  // motorSpeed(leftPID_output,rightPID_output);
+  motorSpeed(255, 255);
  
 }
 
