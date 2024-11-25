@@ -76,23 +76,19 @@ PID rightPID(&leftVel_rad, &rightPID_output, &rightSpeed, rightGains.Kp, rightGa
 
 using namespace BLA;
 
-BLA::Matrix<3, 3> A = { -204.9, -798.2, -171.8,
-                         512, 0, 0,
-                         0, 256, 0 };
-BLA::Matrix<3, 1> B = { 4, 0, 0 };
-BLA::Matrix<1, 3> C = { 0.9374, -0.3582, 2.908 };
-float D = -0.0006;
-BLA::Matrix<1, 3> K_x = {92.7750, -155.3811, -26.7866};
-float K_i = -74.6265;
-BLA::Matrix<3, 1> L = {1.581, 0.2632, -0.4043};
+double A = -15.3171;
+double B = 1.053;
+double C = 1;
+float D = 0;
+double K_x = 61.4273;
+float K_i = -664.7673;
 // State and observer variables
-BLA::Matrix<3, 1> x_hat = { 0, 0, 0 };  // Estimated state
-BLA::Matrix<3, 1> x_dot = { 0, 0, 0 };  // State derivative
+float x_dot = 0;  // State derivative
 float x_i = 0;                          // Integral state
 float y = 0;                            // Output
 float y_hat = 0;                        // Estimated output
 float u = 0;                            // Control input
-float r = 15.0;                            // Reference input (desired speed)
+float r = 3.0;                            // Reference input (desired speed)
 
 // Sampling time
 const float Ts = 0.005; // 1ms (adjust based on system needs)
@@ -226,18 +222,9 @@ void loop() {
     // Update integral state
     x_i += error * Ts;
 
-    // Compute estimated output
-    y_hat = (C * x_hat)(0, 0) + D * u;
-
-    // Observer update: dx_hat = A * x_hat + B * u + L * (y - y_hat)
-    BLA::Matrix<3, 1> observer_correction = L * (y - y_hat);
-    x_dot = A * x_hat + B * u + observer_correction;
-
-    // Update estimated states using Euler integration
-    x_hat = x_hat + x_dot * Ts;
 
     // Compute control input: u = -K_x * x_hat - K_i * x_i
-    u = -(K_x * x_hat)(0, 0) - K_i * x_i;
+    u = -(K_x * y) - K_i * x_i;
 
     // Simulate output (if needed for testing): y = C * x + D * u
     // y = (C * x_hat)(0, 0) + D * u;
