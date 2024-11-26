@@ -71,28 +71,28 @@ PID rightPID(&leftVel_rad, &rightPID_output, &rightSpeed, rightGains.Kp, rightGa
 // double C_d[3] = {0.9374, -0.3582, 2.908};
 // double D_d = 0;
 // double K[3] = {98.7750 -153.6563  -31.3202}; // State feedback gain
-// double K_i = -82.9183;    // Integral gain
+// double Ki_L = -82.9183;    // Integral gain
 // double L[3] = {1178.1,200.8,-404.8}; // Observer gain
 
 using namespace BLA;
 
-BLA::Matrix<3, 3> A = { -204.9, -798.2, -171.8,
+BLA::Matrix<3, 3> A_L = { -204.9, -798.2, -171.8,
                          512, 0, 0,
                          0, 256, 0 };
-BLA::Matrix<3, 1> B = { 4, 0, 0 };
-BLA::Matrix<1, 3> C = { 0.9374, -0.3582, 2.908 };
-float D = -0.0006;
-BLA::Matrix<1, 3> K_x = {92.7750, -155.3811, -26.7866};
-float K_i = -74.6265;
-BLA::Matrix<3, 1> L = {1.581, 0.2632, -0.4043};
+BLA::Matrix<3, 1> B_L = { 4, 0, 0 };
+BLA::Matrix<1, 3> C_L = { 0.9374, -0.3582, 2.908 };
+float D_L = -0.0006;
+BLA::Matrix<1, 3> Kx_L = {23.7750, -186.8543, -40.4584};
+float Ki_L = -11.6604;
+BLA::Matrix<3, 1> L = {1.3643, -0.3678, -0.4111};
 // State and observer variables
-BLA::Matrix<3, 1> x_hat = { 0, 0, 0 };  // Estimated state
-BLA::Matrix<3, 1> x_dot = { 0, 0, 0 };  // State derivative
-float x_i = 0;                          // Integral state
-float y = 0;                            // Output
-float y_hat = 0;                        // Estimated output
-float u = 0;                            // Control input
-float r = 15.0;                            // Reference input (desired speed)
+BLA::Matrix<3, 1> x_hat_l = { 0, 0, 0 };  // Estimated state
+BLA::Matrix<3, 1> x_dot_l = { 0, 0, 0 };  // State derivative
+float xi_L = 0;                          // Integral state
+float y_L = 0;                            // Output
+float y_hat_L = 0;                        // Estimated output
+float u_L = 0;                            // Control input
+float r_L = 5.0;                            // Reference input (desired speed)
 
 // Sampling time
 const float Ts = 0.005; // 1ms (adjust based on system needs)
@@ -219,35 +219,37 @@ void loop() {
     leftVel_rad = calculateRadPerSec(Leftpulses, dt);
     rightVel_rad = calculateRadPerSec(Rightpulses, dt);
 
-    y = static_cast<float>(leftVel_rad);
+    y_L = static_cast<float>(leftVel_rad);
 
-    float error = r - y;
+    float error = r_L - y_L;
 
     // Update integral state
-    x_i += error * Ts;
+    xi_L += error * Ts;
 
     // Compute estimated output
-    y_hat = (C * x_hat)(0, 0) + D * u;
+    y_hat_L = (C_L * x_hat_l)(0, 0) + D_L * u_L;
 
-    // Observer update: dx_hat = A * x_hat + B * u + L * (y - y_hat)
-    BLA::Matrix<3, 1> observer_correction = L * (y - y_hat);
-    x_dot = A * x_hat + B * u + observer_correction;
+    // Observer update: dx_hat = A_L * x_hat_l + B_L * u_L + L * (y_L - y_hat_L)
+    BLA::Matrix<3, 1> observer_correction = L * (y_L - y_hat_L);
+    x_dot_l = A_L * x_hat_l + B_L * u_L + observer_correction;
 
     // Update estimated states using Euler integration
-    x_hat = x_hat + x_dot * Ts;
+    x_hat_l = x_hat_l + x_dot_l * Ts;
 
-    // Compute control input: u = -K_x * x_hat - K_i * x_i
-    u = -(K_x * x_hat)(0, 0) - K_i * x_i;
+    // Compute control input: u_L = -Kx_L * x_hat_l - Ki_L * xi_L
+    u_L = -(Kx_L * x_hat_l)(0, 0) - Ki_L * xi_L;
 
-    // Simulate output (if needed for testing): y = C * x + D * u
-    // y = (C * x_hat)(0, 0) + D * u;
+    // Simulate output (if needed for testing): y_L = C_L * x + D_L * u_L
+    // y_L = (C_L * x_hat_l)(0, 0) + D_L * u_L;
 
-    int duty = constrain(u, -255, 255);
+    int duty = constrain(u_L, -255, 255);
 
     // Print for debugging
-    Serial.print("Control Input (u): "); Serial.print(u);
-    Serial.print(" Integral State (x_i): "); Serial.print(x_i);
-    Serial.print(" Output (y): "); Serial.println(y);
+    Serial.print("Control Input (u_L): "); Serial.print(u_L);
+    Serial.print(" error (error): "); Serial.print(error);
+    Serial.print(" state (x_hat_l): "); Serial.print(x_hat_l);
+    Serial.print(" Integral State (xi_L): "); Serial.print(xi_L);
+    Serial.print(" Output (y_L): "); Serial.println(y_L);
     motorSpeed(duty, 0);
   }
 }
