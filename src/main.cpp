@@ -4,6 +4,7 @@
 // #include <Motors.h>
 #include <filters.h>
 #include <BasicLinearAlgebra.h>
+#include "StateFeedbackController.h"
 
 
 
@@ -76,27 +77,45 @@ PID rightPID(&leftVel_rad, &rightPID_output, &rightSpeed, rightGains.Kp, rightGa
 
 using namespace BLA;
 
-BLA::Matrix<3, 3> A_L = { -204.9, -798.2, -171.8,
+BLA::Matrix<3, 3, double> A_L = { -204.9, -798.2, -171.8,
                          512, 0, 0,
                          0, 256, 0 };
-BLA::Matrix<3, 1> B_L = { 4, 0, 0 };
-BLA::Matrix<1, 3> C_L = { 0.9374, -0.3582, 2.908 };
-float D_L = -0.0006;
-BLA::Matrix<1, 3> Kx_L = {23.7750, -186.8543, -40.4584};
-float Ki_L = -11.6604;
-BLA::Matrix<3, 1> L = {1.3643, -0.3678, -0.4111};
+BLA::Matrix<3, 1, double> B_L = { 4, 0, 0 };
+BLA::Matrix<1, 3, double> C_L = { 0.9374, -0.3582, 2.908 };
+double D_L = -0.0006;
+BLA::Matrix<1, 3, double> Kx_L = {23.7750, -186.8543, -40.4584};
+double Ki_L = -11.6604;
+BLA::Matrix<3, 1, double> L = {1.3643, -0.3678, -0.4111};
 // State and observer variables
-BLA::Matrix<3, 1> x_hat_l = { 0, 0, 0 };  // Estimated state
-BLA::Matrix<3, 1> x_dot_l = { 0, 0, 0 };  // State derivative
-float xi_L = 0;                          // Integral state
-float y_L = 0;                            // Output
-float y_hat_L = 0;                        // Estimated output
-float u_L = 0;                            // Control input
-float r_L = 5.0;                            // Reference input (desired speed)
+BLA::Matrix<3, 1, double> x_hat_l = { 0, 0, 0 };  // Estimated state
+BLA::Matrix<3, 1, double> x_dot_l = { 0, 0, 0 };  // State derivative
+double xi_L = 0;                          // Integral state
+double y_L = 0;                            // Output
+double y_hat_L = 0;                        // Estimated output
+double u_L = 0;                            // Control input
+double r_L = 5.0;                            // Reference input (desired speed)
+BLA::Matrix<3, 3, double> A_R = {-231.6, -805.5, -179.6,
+                         512, 0, 0,
+                         0, 256, 0 };
+BLA::Matrix<3, 1, double> B_R = { 4, 0, 0 };
+BLA::Matrix<1, 3, double> C_R = {0.8804,-1.331,2.885};
+double D_R = 0.004519;
+BLA::Matrix<1, 3, double> Kx_R = {17.1000,-188.6782,-42.3636};
+double Ki_R = -11.7534;
+// State and observer variables
+BLA::Matrix<3, 1, double> x_hat_R = { 0, 0, 0 };  // Estimated state
+BLA::Matrix<3, 1, double> x_dot_R = { 0, 0, 0 };  // State derivative
+float xi_R = 0;                          // Integral state
+double y_R = 0;                            // Output
+double y_hat_R = 0;                        // Estimated output
+double u_R = 0;                            // Control input
+double r_R = 5.0;                            // Reference input (desired speeddouble
 
 // Sampling time
-const float Ts = 0.005; // 1ms (adjust based on system needs)
+const float Ts = 0.005;
 
+StateFeedbackController leftMotorController(A_L, B_L, C_L, D_L, Kx_L, Ki_L, L, Ts, &leftVel_rad, &r_L, &u_L);
+StateFeedbackController rightMotorController(A_R, B_R, C_R, D_R, Kx_R, Ki_R, L, Ts, &rightVel_rad, &r_R, &u_R);
 
 const int res = 8;
 const int freq = 30000;
@@ -216,41 +235,17 @@ void loop() {
     previousRightPosition = currentRightPosition; // Update the previous position
 
     // Calculate rad/s
-    leftVel_rad = calculateRadPerSec(Leftpulses, dt);
-    rightVel_rad = calculateRadPerSec(Rightpulses, dt);
+    leftVel_rad = fl.filterIn(calculateRadPerSec(Leftpulses, dt));
+    rightVel_rad = fr.filterIn(calculateRadPerSec(Rightpulses, dt));
 
-    y_L = static_cast<float>(leftVel_rad);
+    leftMotorController.update();
+    rightMotorController.update();
 
-    float error = r_L - y_L;
+    int dutyL = constrain(u_L, -255, 255);
+    int dutyR = constrain(u_R, -255, 255);
 
-    // Update integral state
-    xi_L += error * Ts;
-
-    // Compute estimated output
-    y_hat_L = (C_L * x_hat_l)(0, 0) + D_L * u_L;
-
-    // Observer update: dx_hat = A_L * x_hat_l + B_L * u_L + L * (y_L - y_hat_L)
-    BLA::Matrix<3, 1> observer_correction = L * (y_L - y_hat_L);
-    x_dot_l = A_L * x_hat_l + B_L * u_L + observer_correction;
-
-    // Update estimated states using Euler integration
-    x_hat_l = x_hat_l + x_dot_l * Ts;
-
-    // Compute control input: u_L = -Kx_L * x_hat_l - Ki_L * xi_L
-    u_L = -(Kx_L * x_hat_l)(0, 0) - Ki_L * xi_L;
-
-    // Simulate output (if needed for testing): y_L = C_L * x + D_L * u_L
-    // y_L = (C_L * x_hat_l)(0, 0) + D_L * u_L;
-
-    int duty = constrain(u_L, -255, 255);
-
+    motorSpeed(dutyL, dutyR);
     // Print for debugging
-    Serial.print("Control Input (u_L): "); Serial.print(u_L);
-    Serial.print(" error (error): "); Serial.print(error);
-    Serial.print(" state (x_hat_l): "); Serial.print(x_hat_l);
-    Serial.print(" Integral State (xi_L): "); Serial.print(xi_L);
-    Serial.print(" Output (y_L): "); Serial.println(y_L);
-    motorSpeed(duty, 0);
   }
 }
 
